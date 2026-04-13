@@ -1,0 +1,286 @@
+The Road Safety Platform is a full-stack geospatial machine learning application designed to predict accident risk for road segments in Chennai, India. The system combines real-time weather data, historical accident patterns, and road geometry analysis to provide risk assessments for individual road segments through an interactive web map interface.
+
+Architecture Overview
+The application follows a three-tier architecture:
+
+Data Flow
+User clicks on a road segment on the interactive map
+Frontend sends road index to backend API
+Backend fetches real-time weather data and current time
+Backend calls Python ML inference script
+ML engine processes features and returns risk prediction
+Frontend displays risk information in a popup
+ML Engine Components
+1. Data Preprocessing (preprocess.py)
+Purpose: Clean and transform raw accident data for model training.
+
+Input: US Accidents dataset (US_Accidents_March23.csv) with ~500K accident records.
+
+Key Processing Steps:
+
+Temporal Features:
+Extract hour from Start_Time
+Create DayOfWeek and derive is_weekend (Saturday/Sunday = 1)
+Create is_night (22:00-06:00 = 1)
+Weather Simplification:
+Map complex weather conditions to 5 categories: Clear, Rain, Snow, Fog, Storm
+One-hot encode weather categories
+Infrastructure Features:
+Convert boolean columns (Bump, Junction, Railway, Roundabout, Traffic_Signal) to integers
+Missing Value Handling:
+Numerical features: median imputation
+Weather_Condition: "Unknown" category
+Output: accidents_processed.csv with engineered features for model training.
+
+2. Model Training (train_universal_xgboost.py)
+Algorithm: XGBoost Regressor for predicting accident severity (1-4 scale).
+
+Model Configuration:
+
+Hyperparameters:
+n_estimators: 1200
+max_depth: 6
+learning_rate: 0.03
+subsample: 0.8
+colsample_bytree: 0.8
+alpha: 0.1 (L1 regularization)
+lambda: 2.0 (L2 regularization)
+Tree Method: "hist" for efficient training
+Training Process:
+
+75/25 train/test split (random_state=42)
+Target: continuous severity score
+Evaluation metrics: RMSE and R² score
+Saved Artifacts:
+
+universal_severity_model.pkl: Trained XGBoost model
+universal_feature_names.pkl: Feature order for inference consistency
+universal_target_bounds.pkl: Min/max severity values for normalization
+3. Inference System (predict_api.py)
+Purpose: Generate risk predictions for individual road segments.
+
+Input Parameters (JSON from backend):
+
+road_index: Index to lookup road geometry data
+visibility, temperature, humidity: Environmental conditions
+weather: Simplified weather type (Clear/Rain/Snow/Fog/Storm)
+hour: Current hour (0-23)
+is_weekend: Boolean for weekend status
+Processing Pipeline:
+
+Load Model Artifacts:
+
+XGBoost model, feature names, target bounds
+Load Geometry Data:
+
+Road segment features from chennai_geometry_final.csv
+Feature Construction:
+
+Initialize all features to 0 (matching training schema)
+Set environmental features (temperature, humidity, visibility)
+Set temporal features (hour, is_weekend)
+Set weather one-hot encoding (e.g., Weather_Simplified_Rain = 1)
+ML Risk Calculation:
+
+Raw prediction = model.predict(features)
+Normalized ML Risk = (raw_pred - min_target) / (max_target - min_target)
+Clipped to [0,1] and scaled to [0,100]
+Geometry Risk Lookup:
+
+Retrieve pre-computed geometry_risk_score for the road_index
+Risk Fusion:
+
+Final Risk = 0.65 × ML Risk + 0.35 × Geometry Risk
+Risk Classification:
+
+LOW: < 35
+MEDIUM: 35-70
+HIGH: > 70
+Output: JSON with ml_risk, geometry_risk, final_risk, risk_tier
+
+4. Geo-Spatial Processing
+Road Network Extraction (download_chennai_roads.py)
+Uses osmnx library to download Chennai road network from OpenStreetMap
+Filters for drivable roads only
+GeoJSON Building (build_geojson.py)
+Converts OSM data to GeoJSON format for frontend visualization
+Includes road properties like name, type, geometry
+Geometry Feature Engineering (build_final_geometry.py)
+Computes intrinsic road risk factors independent of weather/time:
+
+Features Calculated (all normalized 0-1):
+
+Road Length (25% weight): Longer segments may have more accidents
+Curvature (25% weight): Total turning angle per unit length
+Intersection Density (20% weight): Road intersections within 120m buffer
+Network Density (20% weight): Road count in 200m radius
+Road Type Weight (10% weight): Primary=1.0, Secondary=0.7, Residential=0.4
+Geometry Risk Score: Weighted sum of normalized features, scaled to 0-100 using 5th-95th percentile bounds.
+
+5. Model Explainability (shap_universal_explain.py)
+Uses SHAP library for feature importance analysis
+Helps understand which features contribute most to risk predictions
+Used for model auditing and validation
+Backend Components
+1. Server Setup (server.js)
+Framework: Express.js
+Port: 5000
+Middleware:
+CORS for cross-origin requests
+JSON body parsing
+Routes: Single POST endpoint /api/risk/predict
+2. API Routes (risk.js)
+POST /api/risk/predict
+
+Accepts: { road_index: number }
+Returns: Risk prediction JSON with weather/time context
+3. Risk Controller (riskController.js)
+Request Processing Flow:
+
+Extract Parameters: road_index from request body
+
+Temporal Context:
+
+Current hour from system time
+is_weekend flag (Saturday/Sunday)
+Weather Data Fetching:
+
+API: https://api.open-meteo.com/v1/forecast
+Location: Chennai (13.0827°N, 80.2707°E)
+Data: temperature_2m, weathercode
+Weather code mapping:
+51-71: Rain
+71-95: Snow
+≥95: Storm
+Default: Clear
+Fallback Values:
+
+visibility: 10 miles
+humidity: 70%
+ML Service Call: Invoke Python inference script
+
+Response: Return prediction + contextual data (weather, temperature, hour)
+
+4. ML Service Integration (mlService.js)
+Thin wrapper around Python execution utility
+Delegates to runPython.js for actual process spawning
+5. Python Execution Utility (runPython.js)
+Process Management: Uses Node.js child_process.spawn()
+Python Environment: Activates virtual environment (.venv/Scripts/python.exe)
+Script Path: predict_api.py
+I/O Handling:
+Sends input JSON via stdin
+Captures stdout/stderr
+Parses JSON output
+Error Handling: Promise-based with proper error propagation
+Frontend Components
+1. Application Structure (App.jsx)
+Main Component: Single-page React application with interactive map.
+
+State Management:
+
+geoData: GeoJSON road network data
+riskMap: Cache object mapping road_index → risk prediction
+selectedLayerRef: Reference to currently highlighted road layer
+2. Map Integration
+Libraries: React-Leaflet v5.0.0 + Leaflet
+
+Map Configuration:
+
+Center: Chennai coordinates (13.0827, 80.2707)
+Zoom: 13
+Basemap: OpenStreetMap tiles
+GeoJSON Layer:
+
+Renders road geometries from chennai_roads.geojson
+Default styling: blue lines, weight 2
+3. Interactive Features
+Click Handler (onEachFeature callback):
+Cache Check: Verify if risk data exists for clicked road
+API Call: If not cached, POST to /api/risk/predict with road_index
+Cache Update: Store prediction result
+Visual Update:
+Color road based on risk tier
+Highlight selected road (weight=6)
+Reset previous selection
+Risk-Based Coloring:
+High Risk (>70): Red (#e53935)
+Medium Risk (35-70): Orange (#fb8c00)
+Low Risk (≤35): Green (#43a047)
+4. Risk Explanation System
+Function: explainRisk() generates human-readable explanations based on:
+
+Geometry Risk >70: "complex road structure (curves/intersections)"
+ML Risk >70: "harsh environmental conditions"
+Night Hours (22:00-06:00): "night-time low visibility"
+Weather Conditions:
+Rain: "wet roads increase accident risk"
+Fog: "fog reduces visibility"
+Storm: "dangerous conditions"
+5. Popup Interface
+Displays comprehensive risk information:
+
+Road name
+Risk tier (color-coded)
+Current weather with emoji
+Temperature
+Time (12-hour format)
+ML risk score
+Geometry risk score
+Final risk score
+AI-generated explanation
+6. Dependencies & Build
+React: 19.x
+Vite: Build tool and dev server
+Axios: HTTP client for API calls
+Leaflet: Core mapping library
+React-Leaflet: React wrapper for Leaflet
+Technology Stack Summary
+Component	Technology	Version/Notes
+Frontend Framework	React	19.x
+Frontend Build	Vite	Latest
+Map Library	Leaflet + React-Leaflet	5.0.0
+Backend Framework	Express.js	Node.js
+ML Framework	XGBoost	scikit-learn
+Data Processing	Pandas, NumPy	Python
+Geo Processing	GeoPandas, Shapely, osmnx	Python
+Weather API	Open-Meteo	REST API
+Model Serialization	joblib	Python
+Explainability	SHAP	Python
+End-to-End Workflow Example
+Scenario: User clicks on Anna Salai at 11 PM during heavy rain on a Saturday.
+
+Frontend: Click event on road segment (road_index = 42)
+API Request: POST /api/risk/predict with {road_index: 42}
+Backend Processing:
+Time: 23:00, is_weekend = true
+Weather API call returns: temperature=28°C, weathercode=65 (heavy rain)
+Mapped weather: "Rain"
+ML Inference:
+Features: temperature=28, humidity=70, visibility=10, hour=23, is_weekend=1, Weather_Simplified_Rain=1
+ML Risk prediction: 78.5
+Geometry lookup: 65.0
+Final Risk: 0.65×78.5 + 0.35×65.0 = 73.8
+Risk Tier: HIGH
+Response: JSON with risk scores + weather context
+Frontend Display:
+Road colored red
+Popup shows: "HIGH RISK", "🌧️ Rain", "🌡️ 28°C", "🕒 11:00 PM"
+Explanation: "influenced by: harsh environmental conditions, night-time low visibility, wet roads increase accident risk"
+Key Architectural Decisions
+Dual-Risk Approach: Separates environmental/temporal factors (ML model) from structural factors (geometry analysis) for more robust predictions.
+
+Real-Time Weather Integration: Uses live weather data instead of historical averages for responsive risk assessment.
+
+Transfer Learning: Trains on US accident data but applies to Chennai roads, assuming similar causal relationships.
+
+Caching Strategy: Frontend caches predictions to minimize API calls and improve user experience.
+
+Geospatial Grounding: Geometry features prevent bias toward high-traffic routes; curves and intersections are inherently riskier.
+
+Explainability Focus: Rules-based explanation system provides immediate, understandable insights without computational overhead.
+
+Microservices Architecture: Separate Python ML engine allows for independent scaling and technology choices.
+
+This platform demonstrates a production-ready approach to geospatial risk assessment, combining machine learning with domain expertise in transportation safety.
+

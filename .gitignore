@@ -1,0 +1,18 @@
+# Node
+node_modules/
+package-lock.json
+
+# Python
+_pycache_/
+*.pyc
+.venv/
+
+# Data (BIG FILES)
+data/
+models/
+*.pkl
+*.csv
+
+# OS
+.DS_Store
+Thumbs.db
