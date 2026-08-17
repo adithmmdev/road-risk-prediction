@@ -18,10 +18,15 @@ models/
 *.pkl
 *.joblib
 *.csv
+*.parquet
+*.geojson
 
-# Generated caches
+# Runtime / generated caches
 ml-engine/cache/
+*.log
 
-# OS
+# OS / editor
 .DS_Store
 Thumbs.db
+.vscode/
+.idea/
