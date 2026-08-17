@@ -58,7 +58,7 @@ jobs:
           node --check utils/runPython.js
 
   python:
-    name: Python syntax check
+    name: Python checks and unit tests
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -71,3 +71,7 @@ jobs:
 
       - name: Compile Python source
         run: python -m compileall -q ml-engine/src ml-engine/experiments
+
+      - name: Run unit tests
+        working-directory: ml-engine
+        run: python -m unittest discover -s tests -v
