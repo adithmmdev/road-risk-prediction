@@ -1,17 +1,26 @@
 # Node
 node_modules/
-package-lock.json
 
 # Python
-_pycache_/
+__pycache__/
 *.pyc
 .venv/
+venv/
 
-# Data (BIG FILES)
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# Generated data and model artifacts
 data/
 models/
 *.pkl
+*.joblib
 *.csv
+
+# Generated caches
+ml-engine/cache/
 
 # OS
 .DS_Store
