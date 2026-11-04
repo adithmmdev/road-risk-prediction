@@ -4,61 +4,62 @@ import joblib
 import pandas as pd
 import numpy as np
 import os
+from risk_logic import fuse_risk
 
-# ======================================================
-# SAFE BASE DIRECTORY (INDUSTRY LEVEL)
-# ======================================================
+
+
+
 
 BASE_DIR = os.path.abspath(
     os.path.join(os.path.dirname(__file__), "..", "..")
 )
 
-# ======================================================
+
 # PATHS
-# ======================================================
+
 
 ML_MODEL_PATH = os.path.join(BASE_DIR, "models", "universal_severity_model.pkl")
 FEATURE_PATH = os.path.join(BASE_DIR, "models", "universal_feature_names.pkl")
 SCALER_PATH = os.path.join(BASE_DIR, "models", "universal_target_bounds.pkl")
 GEOMETRY_PATH = os.path.join(BASE_DIR, "data", "processed", "chennai_geometry_final.csv")
 
-# ======================================================
-# VALIDATION (VERY IMPORTANT)
-# ======================================================
+
+
+
 
 for path in [ML_MODEL_PATH, FEATURE_PATH, SCALER_PATH, GEOMETRY_PATH]:
     if not os.path.exists(path):
         raise FileNotFoundError(f"Missing file: {path}")
 
-# ======================================================
+
 # LOAD INPUT
-# ======================================================
+
 
 input_data = json.loads(sys.argv[1])
 
-# ======================================================
+
 # LOAD ARTIFACTS
-# ======================================================
+
 
 model = joblib.load(ML_MODEL_PATH)
 feature_names = joblib.load(FEATURE_PATH)
 min_target, max_target = joblib.load(SCALER_PATH)
 geo_df = pd.read_csv(GEOMETRY_PATH)
 
-# ======================================================
+
 # VALIDATE INDEX
-# ======================================================
+
 
 road_index = input_data["road_index"]
 
-if road_index >= len(geo_df):
+if isinstance(road_index, bool) or not isinstance(road_index, int) or not 0 <= road_index < len(geo_df):
     raise ValueError("Invalid road_index")
 
 segment = geo_df.iloc[road_index]
 
-# ======================================================
+
 # BUILD ML INPUT
-# ======================================================
+
 
 ml_input = {col: 0 for col in feature_names}
 
@@ -90,40 +91,27 @@ if input_data["weather"] in weather_map:
 
 X = pd.DataFrame([ml_input])[feature_names]
 
-# ======================================================
+
 # ML PREDICTION
-# ======================================================
+
 
 raw = model.predict(X)[0]
+if max_target <= min_target:
+    raise ValueError("Target normalization bounds must be increasing")
 ml_norm = (raw - min_target) / (max_target - min_target)
 ml_risk = float(np.clip(ml_norm, 0, 1) * 100)
 
-# ======================================================
+
 # GEOMETRY
-# ======================================================
+
 
 geometry_risk = float(segment["geometry_risk_score"])
 
-# ======================================================
+
 # FUSION
-# ======================================================
 
-final_risk = 0.65 * ml_risk + 0.35 * geometry_risk
 
-# ======================================================
-# RISK TIER
-# ======================================================
-
-if final_risk < 35:
-    tier = "LOW"
-elif final_risk < 70:
-    tier = "MEDIUM"
-else:
-    tier = "HIGH"
-
-# ======================================================
-# OUTPUT
-# ======================================================
+final_risk, tier = fuse_risk(ml_risk, geometry_risk)
 
 result = {
     "ml_risk": round(ml_risk, 2),

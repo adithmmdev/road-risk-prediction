@@ -1,114 +1,104 @@
 # Road Risk Prediction
 
-This is a project I built to explore how machine learning and geospatial data can be used to identify roads that may have a higher accident risk.
+A Chennai road map connected to a Python accident-severity model through an Express API. The project combines a model score with road geometry to explore how risk estimates can be presented at road-segment level.
 
-The current version focuses on Chennai and combines accident data, road geometry, time information, and weather context. The result is shown through an interactive map and can also be accessed through an API.
+**Status:** the frontend and risk-fusion tests run from this checkout. Full prediction needs model and processed geometry files that are not committed. See [required artifacts](docs/data-and-models.md) before running the API.
 
-## What I built
+## What it does
 
-I wanted to build the project as a complete system rather than only training a model.
+- Displays Chennai road segments on an interactive Leaflet map.
+- Fetches current weather context for Chennai through the backend.
+- Sends road and time features to a Python inference process.
+- Combines normalized ML output with a precomputed geometry score.
+- Shows LOW, MEDIUM or HIGH risk, along with the component scores.
 
-The main parts are:
+## Architecture
 
-* A React map for selecting and viewing road risk
-* An Express API for handling requests
-* A Python machine learning layer for inference
-* Geospatial processing with OpenStreetMap data
-* Road geometry features such as length, curvature and intersection density
-* Weather information from Open Meteo
-* A risk calculation that combines the model output with a geometry based score
-
-## How it works
-
-```text
-React map
-   ↓
-Express API
-   ↓
-Python inference
-   ↓
-Model + road features + weather context
-   ↓
-Final risk score
-   ↓
-Map result
+```mermaid
+flowchart LR
+    Map[React and Leaflet] --> API[Express API]
+    Weather[Open-Meteo] --> API
+    API --> Python[Python child process]
+    Model[Model and feature artifacts] --> Python
+    Geometry[Processed road geometry] --> Python
+    Python --> API
+    API --> Map
 ```
 
-The current committed model uses an XGBoost regressor for accident severity. Its output is normalized and combined with a geometry risk score.
+The score is `0.65 × ML risk + 0.35 × geometry risk`. Both components use a 0–100 scale. Scores below 35 are LOW, scores from 35 to below 70 are MEDIUM, and scores of 70 or above are HIGH. These weights are heuristic.
 
-```text
-Final Risk = 0.65 × ML Risk + 0.35 × Geometry Risk
-```
+## Run locally
 
-The project currently uses three risk levels: LOW, MEDIUM and HIGH.
-
-## Machine learning work
-
-The feature work includes things such as:
-
-* Hour of day
-* Day of week
-* Weekend and night indicators
-* Weather related features
-* Road length
-* Curvature
-* Intersection density
-* Network density
-* Road type
-
-I also experimented with different models and used metrics such as RMSE, MAE, MAPE and R² while comparing them.
-
-SHAP based analysis is included for looking at which features influence predictions.
-
-## Project structure
-
-```text
-road-risk-prediction/
-├── backend/
-├── frontend/
-├── ml-engine/
-│   ├── experiments/
-│   └── src/
-├── documentation/
-├── .github/
-│   └── workflows/
-└── README.md
-```
-
-## Running it locally
-
-### Backend
-
-```bash
-cd backend
-npm install
-npm start
-```
-
-### Frontend
+Use Node.js 22.12+ and Python 3.11 or 3.12. Clone the repository, then start the frontend:
 
 ```bash
 cd frontend
-npm install
+npm ci
 npm run dev
 ```
 
-The Python inference code also needs the required model and geospatial files to be available locally.
+Open **http://localhost:5173**. The road geometry file is included, so the map can load before inference is configured.
 
-## Things I learned from this project
+For predictions, prepare the files described in [data-and-models.md](docs/data-and-models.md), then from the repository root:
 
-This project taught me that getting a model to work is only one part of building an ML system. A useful application also needs data processing, feature creation, API design, frontend integration and a way to make the result understandable to the user.
+```bash
+python -m venv ml-engine/.venv
+```
 
-I also spent time dealing with practical issues such as large geospatial files, separating generated data from source code, and keeping the model pipeline consistent with the API.
+Activate it with `ml-engine\.venv\Scripts\Activate.ps1` in PowerShell, or `source ml-engine/.venv/bin/activate` on macOS/Linux:
 
-## Current limitations
+```bash
+python -m pip install -r ml-engine/requirements.txt
+cd backend
+npm ci
+npm start
+```
 
-The baseline model was trained using accident data that does not come directly from Chennai, so geographic transfer is an important limitation.
+The backend runs on port **5000** and automatically finds `ml-engine/.venv`. Set `PYTHON_EXECUTABLE` to use another Python interpreter. The frontend uses `/api` through the Vite proxy; set `VITE_API_BASE_URL` at build time when hosting the API separately. Example environment files are included in both folders.
 
-The current risk weights are also heuristic and need proper validation with local ground truth before the system could be used for real road safety decisions.
+## API example
 
-This is a project for learning, experimentation and demonstration.
+```bash
+curl -X POST http://localhost:5000/api/risk/predict -H "Content-Type: application/json" -d '{"road_index":0}'
+```
 
-## Tech used
+`road_index` is a non-negative integer indexing a row in the processed geometry CSV. The API supplies weather and current Chennai time. It returns `ml_risk`, `geometry_risk`, `final_risk`, `risk_tier`, `weather`, `temperature` and `hour`. The API request only succeeds when the required artifacts are present and compatible.
 
-Python, Pandas, NumPy, scikit learn, XGBoost, SHAP, OSMnx, GeoPandas, Shapely, React, Vite, Leaflet, Node.js, Express and Open Meteo.
+## Checks
+
+```bash
+cd frontend
+npm ci
+npm run lint
+npm run build
+```
+
+```bash
+cd backend
+npm ci
+npm test
+```
+
+```bash
+cd ml-engine
+python -m unittest discover -s tests -v
+```
+
+The tests cover score boundaries, risk fusion and the Python process bridge. They do not validate model accuracy.
+
+## Data and limitations
+
+The baseline model uses accident data from outside Chennai. Its output is not a calibrated accident probability for Chennai roads. Visibility and humidity currently use fixed fallback values; weather comes from a city-level observation. The browser uses a heuristic mapping from road identifiers to geometry row indices, so spatial correspondence needs validation before interpreting individual predictions.
+
+This is an exploratory project, not a road-safety decision tool. Local ground-truth evaluation, artifact versioning and a stable road-ID mapping are the main next steps. The repository does not currently implement route optimization or a PostgreSQL persistence layer.
+
+## Code map
+
+- `frontend/src/App.jsx`: map, road selection and result popup.
+- `backend/controllers/riskController.js`: request validation and weather context.
+- `backend/utils/runPython.js`: Python process bridge.
+- `ml-engine/src/inference/`: inference and risk-fusion logic.
+- `ml-engine/src/geo/`: road geometry preparation.
+- `ml-engine/experiments/`: model comparison and analysis scripts.
+
+Road geometry comes from [OpenStreetMap](https://www.openstreetmap.org/copyright); map tiles retain OpenStreetMap contributor attribution. Weather is supplied by [Open-Meteo](https://open-meteo.com/).

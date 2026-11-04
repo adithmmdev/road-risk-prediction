@@ -3,9 +3,9 @@ import pandas as pd
 import numpy as np
 import os
 
-# ======================================================
+
 # PATHS
-# ======================================================
+
 
 ML_MODEL_PATH = os.path.join("models", "universal_severity_model.pkl")
 ML_FEATURE_PATH = os.path.join("models", "universal_feature_names.pkl")
@@ -13,9 +13,9 @@ ML_SCALER_PATH = os.path.join("models", "universal_target_bounds.pkl")
 
 GEOMETRY_PATH = os.path.join("data", "processed", "chennai_geometry_final.csv")
 
-# ======================================================
+
 # LOAD ARTIFACTS
-# ======================================================
+
 
 print("Loading ML model...")
 model = joblib.load(ML_MODEL_PATH)
@@ -29,9 +29,9 @@ min_target, max_target = joblib.load(ML_SCALER_PATH)
 print("Loading geometry data...")
 geo_df = pd.read_csv(GEOMETRY_PATH)
 
-# ======================================================
+
 # SIMULATED FRONTEND INPUT
-# ======================================================
+
 
 request = {
     "road_index": 4,
@@ -45,9 +45,9 @@ request = {
 
 segment = geo_df.iloc[request["road_index"]]
 
-# ======================================================
+
 # BUILD ML INPUT
-# ======================================================
+
 
 ml_input = {col: 0 for col in feature_names}
 
@@ -68,7 +68,7 @@ ml_input["Roundabout"] = 0
 ml_input["Railway"] = 0
 ml_input["Bump"] = 0
 
-# Weather encoding (IMPORTANT FIX)
+
 weather_map = {
     "Rain": "Weather_Simplified_Rain",
     "Fog": "Weather_Simplified_Fog",
@@ -84,9 +84,9 @@ if request["weather"] in weather_map:
 # Convert to DataFrame
 X = pd.DataFrame([ml_input])[feature_names]
 
-# ======================================================
+
 # ML PREDICTION
-# ======================================================
+
 
 print("\nPredicting ML risk...")
 
@@ -96,23 +96,23 @@ ml_norm = (raw - min_target) / (max_target - min_target)
 ml_norm = np.clip(ml_norm, 0, 1)
 ml_risk = round(float(ml_norm * 100), 2)
 
-# ======================================================
+
 # GEOMETRY RISK
-# ======================================================
+
 
 geometry_risk = float(segment["geometry_risk_score"])
 if geometry_risk ==0:
     print("Warning: Geometry risk is 0");
 
-# ======================================================
+
 # FUSION
-# ======================================================
+
 
 final_risk = round(0.65 * ml_risk + 0.35 * geometry_risk, 2)
 
-# ======================================================
+
 # RISK CATEGORY
-# ======================================================
+
 
 if final_risk < 35:
     tier = "LOW"
@@ -121,9 +121,9 @@ elif final_risk < 70:
 else:
     tier = "HIGH"
 
-# ======================================================
+
 # OUTPUT
-# ======================================================
+
 
 print("\n--- FINAL RESULT ---")
 print({

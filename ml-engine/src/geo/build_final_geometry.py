@@ -5,17 +5,17 @@ import os
 import joblib
 from shapely.geometry import LineString
 
-# ======================================================
+
 # PATHS
-# ======================================================
+
 
 INPUT_GEOJSON = os.path.join("data", "processed", "chennai_cleaned.geojson")
 OUTPUT_PATH = os.path.join("data", "processed", "chennai_geometry_final.csv")
 SCALER_PATH = os.path.join("models", "geometry_risk_scaler.pkl")
 
-# ======================================================
+
 # LOAD DATA
-# ======================================================
+
 
 print("Loading Chennai road geometries...")
 gdf = gpd.read_file(INPUT_GEOJSON)
@@ -26,15 +26,15 @@ print("Initial shape:", gdf.shape)
 print("Projecting CRS...")
 gdf = gdf.to_crs(epsg=32644)
 
-# ======================================================
+
 # 1️⃣ ROAD LENGTH
-# ======================================================
+
 
 gdf["road_length_m"] = gdf.geometry.length
 
-# ======================================================
+
 # 2️⃣ CURVATURE (normalized per segment)
-# ======================================================
+
 
 def compute_curvature(line):
     if not isinstance(line, LineString):
@@ -65,9 +65,9 @@ def compute_curvature(line):
 print("Computing curvature...")
 gdf["curvature"] = gdf.geometry.apply(compute_curvature)
 
-# ======================================================
+
 # 3️⃣ INTERSECTION DENSITY
-# ======================================================
+
 
 print("Computing intersection density...")
 
@@ -86,9 +86,9 @@ for idx, row in gdf.iterrows():
 # Normalize
 gdf["intersection_density"] /= (gdf["intersection_density"].max() + 1e-6)
 
-# ======================================================
+
 # 4️⃣ NETWORK DENSITY
-# ======================================================
+
 
 print("Computing network density...")
 
@@ -104,9 +104,9 @@ for idx, row in gdf.iterrows():
 
 gdf["network_density"] /= (gdf["network_density"].max() + 1e-6)
 
-# ======================================================
+
 # 5️⃣ ROAD TYPE WEIGHT
-# ======================================================
+
 
 print("Processing road hierarchy...")
 
@@ -123,9 +123,9 @@ gdf["road_weight"] = (
     gdf["is_residential"] * 0.4
 ).clip(0, 1)
 
-# ======================================================
-# NORMALIZATION (CRITICAL FIX)
-# ======================================================
+
+
+
 
 print("Normalizing features...")
 
@@ -137,9 +137,9 @@ high_c = gdf["curvature"].quantile(0.95)
 
 gdf["curvature_norm"] = ((gdf["curvature"] - low_c) / (high_c - low_c)).clip(0, 1)
 
-# ======================================================
+
 # FINAL GEOMETRY SCORE
-# ======================================================
+
 
 print("Computing final geometry risk...")
 
@@ -151,9 +151,9 @@ gdf["geometry_raw"] = (
     0.10 * gdf["road_weight"]
 )
 
-# ======================================================
+
 # FINAL SCALING (0–100)
-# ======================================================
+
 
 print("Scaling to 0–100...")
 
@@ -167,9 +167,9 @@ gdf["geometry_risk_score"] = (gdf["geometry_scaled"] * 100).round(2)
 os.makedirs("models", exist_ok=True)
 joblib.dump((low, high), SCALER_PATH)
 
-# ======================================================
+
 # SAVE
-# ======================================================
+
 
 gdf[[
     "road_length_m",

@@ -2,15 +2,15 @@ import os
 import osmnx as ox
 import geopandas as gpd
 
-# ======================================================
+
 # OUTPUT PATH
-# ======================================================
+
 
 OUTPUT_PATH = os.path.join("data", "processed", "chennai_cleaned.geojson")
 
-# ======================================================
+
 # DOWNLOAD ROAD NETWORK
-# ======================================================
+
 
 print("Downloading Chennai road network from OSM...")
 
@@ -26,9 +26,9 @@ gdf = ox.graph_to_gdfs(G, nodes=False, edges=True)
 
 print("Downloaded roads:", gdf.shape)
 
-# ======================================================
+
 # CLEAN DATA
-# ======================================================
+
 
 print("Cleaning road data...")
 
@@ -42,9 +42,9 @@ gdf = gdf[gdf.geometry.notnull()]
 # Reset index
 gdf = gdf.reset_index(drop=True)
 
-# ======================================================
+
 # SAVE
-# ======================================================
+
 
 os.makedirs(os.path.join("data", "processed"), exist_ok=True)
 

@@ -8,9 +8,7 @@ function App() {
   const [riskMap, setRiskMap] = useState({});
   const selectedLayerRef = useRef(null); // track selected road
 
-  // =========================================
   // LOAD GEOJSON
-  // =========================================
   useEffect(() => {
     fetch("/chennai_roads.geojson")
       .then((res) => res.json())
@@ -18,18 +16,13 @@ function App() {
       .catch((err) => console.error("GeoJSON load error:", err));
   }, []);
 
-  // =========================================
   // COLOR LOGIC
-  // =========================================
   const getColor = (risk) => {
-    if (risk > 70) return "#e53935"; // red
-    if (risk > 35) return "#fb8c00"; // orange
+    if (risk >= 70) return "#e53935"; // red
+    if (risk >= 35) return "#fb8c00"; // orange
     return "#43a047"; // green
   };
 
-  // =========================================
-  // 🧠 ADVANCED EXPLANATION ENGINE
-  // =========================================
   const explainRisk = (r) => {
     if (!r) return "No data available";
 
@@ -64,18 +57,13 @@ function App() {
       : "Stable road conditions";
   };
 
-  // =========================================
-  // 🕒 TIME FORMATTER (CORRECT)
-  // =========================================
   const formatTime = (hour) => {
     const hour12 = hour % 12 || 12;
     const ampm = hour >= 12 ? "PM" : "AM";
     return `${hour12}:00 ${ampm}`;
   };
 
-  // =========================================
   // ROAD CLICK HANDLER
-  // =========================================
   const onEachFeature = (feature, layer) => {
     const roadId = feature.properties.road_id;
     const roadName = feature.properties.name || "Unnamed Road";
@@ -84,12 +72,10 @@ function App() {
       try {
         let r = riskMap[roadId];
 
-        // =========================================
         // FETCH ONLY IF NOT CACHED
-        // =========================================
         if (!r) {
           const response = await axios.post(
-            "http://localhost:5000/api/risk/predict",
+            `${import.meta.env.VITE_API_BASE_URL || ""}/api/risk/predict`,
             {
               road_index: roadId % 500000,
             }
@@ -105,9 +91,7 @@ function App() {
 
         const color = getColor(r.final_risk);
 
-        // =========================================
         // RESET PREVIOUS ROAD
-        // =========================================
         if (selectedLayerRef.current) {
           selectedLayerRef.current.setStyle({
             color: "blue",
@@ -115,9 +99,7 @@ function App() {
           });
         }
 
-        // =========================================
         // HIGHLIGHT CURRENT ROAD
-        // =========================================
         layer.setStyle({
           color: color,
           weight: 6,
@@ -126,14 +108,10 @@ function App() {
 
         selectedLayerRef.current = layer;
 
-        // =========================================
         // FORMAT TIME
-        // =========================================
         const formattedTime = formatTime(r.hour);
 
-        // =========================================
         // POPUP UI
-        // =========================================
         layer.bindPopup(`
           <div style="font-family: Arial; font-size: 14px; line-height:1.5;">
             <b style="font-size:16px;">${roadName}</b><br/>
@@ -163,9 +141,7 @@ function App() {
     });
   };
 
-  // =========================================
   // RENDER
-  // =========================================
   return (
     <div>
       <h2 style={{ textAlign: "center", margin: "10px" }}>
@@ -177,7 +153,7 @@ function App() {
         zoom={13}
         style={{ height: "90vh", width: "100%" }}
       >
-        <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+        <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' />
 
         {geoData && (
           <GeoJSON

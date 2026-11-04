@@ -13,18 +13,18 @@ from sklearn.linear_model import LinearRegression
 from sklearn.ensemble import RandomForestRegressor
 from xgboost import XGBRegressor
 
-# ======================================================
+
 # PATHS (SIMPLE & RELIABLE)
-# ======================================================
+
 
 DATA_PATH = os.path.join("..", "data", "processed", "accidents_processed.csv")
 RESULT_DIR = os.path.join("results")
 
 os.makedirs(RESULT_DIR, exist_ok=True)
 
-# ======================================================
+
 # LOAD DATA
-# ======================================================
+
 
 print("Loading dataset...")
 
@@ -38,9 +38,9 @@ print("Dataset shape:", df.shape)
 X = df.drop(columns=["Severity"])
 y = df["Severity"]
 
-# ======================================================
+
 # TRAIN / TEST SPLIT (SAME AS MAIN MODEL)
-# ======================================================
+
 
 X_train, X_test, y_train, y_test = train_test_split(
     X, y,
@@ -51,17 +51,17 @@ X_train, X_test, y_train, y_test = train_test_split(
 print("Train:", X_train.shape)
 print("Test:", X_test.shape)
 
-# ======================================================
+
 # SAFE MAPE FUNCTION
-# ======================================================
+
 
 def compute_mape(y_true, y_pred):
     y_true = np.clip(y_true, 1, None)  # avoid division by zero
     return np.mean(np.abs((y_true - y_pred) / y_true)) * 100
 
-# ======================================================
+
 # EVALUATION FUNCTION (ADVANCED)
-# ======================================================
+
 
 def evaluate_model(name, model):
     print(f"\nTraining {name}...")
@@ -93,9 +93,9 @@ def evaluate_model(name, model):
         "predictions": y_pred
     }
 
-# ======================================================
+
 # MODELS
-# ======================================================
+
 
 models = [
     ("Linear Regression", LinearRegression()),
@@ -122,9 +122,9 @@ models = [
     ))
 ]
 
-# ======================================================
+
 # RUN MODELS
-# ======================================================
+
 
 results = []
 all_preds = pd.DataFrame()
@@ -139,9 +139,9 @@ for name, model in models:
 
     all_preds[name] = res["predictions"]
 
-# ======================================================
+
 # SAVE RESULTS
-# ======================================================
+
 
 metrics_df = pd.DataFrame(results)
 metrics_df.to_csv(os.path.join(RESULT_DIR, "metrics.csv"), index=False)

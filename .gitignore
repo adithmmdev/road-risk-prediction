@@ -30,3 +30,9 @@ ml-engine/cache/
 Thumbs.db
 .vscode/
 .idea/
+
+*.py[cod]
+.pytest_cache/
+dist/
+
+ml-engine/src/cache/
